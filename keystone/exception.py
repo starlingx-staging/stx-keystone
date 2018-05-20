@@ -201,6 +201,12 @@ class RegionDeletionError(ForbiddenNotSecurity):
                        "its child regions have associated endpoints.")
 
 
+class WRSForbiddenAction(Error):
+    message_format = _("That action is not permitted")
+    code = 403
+    title = 'Forbidden'
+
+
 class SecurityError(Error):
     """Security error exception.
 
@@ -608,3 +614,9 @@ class LDAPServerConnectionError(UnexpectedError):
 class LDAPInvalidCredentialsError(UnexpectedError):
     message_format = _('Unable to authenticate against Identity backend - '
                        'Invalid username or password')
+
+
+class LDAPSizeLimitExceeded(UnexpectedError):
+    message_format = _('Number of User/Group entities returned by LDAP '
+                       'exceeded size limit. Contact your LDAP '
+                       'administrator.')

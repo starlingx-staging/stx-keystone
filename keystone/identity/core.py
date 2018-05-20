@@ -16,6 +16,7 @@
 
 import functools
 import itertools
+import keyring
 import operator
 import os
 import threading
@@ -52,6 +53,7 @@ MEMOIZE_ID_MAPPING = cache.get_memoization_decorator(group='identity',
 
 DOMAIN_CONF_FHEAD = 'keystone.'
 DOMAIN_CONF_FTAIL = '.conf'
+KEYRING_CGCS_SERVICE = "CGCS"
 
 # The number of times we will attempt to register a domain to use the SQL
 # driver, if we find that another process is in the middle of registering or
@@ -693,7 +695,7 @@ class Manager(manager.Manager):
         None that means we are running in a single backend mode, so to
         remain backwardly compatible, we put in the default domain ID.
         """
-        if not driver.is_domain_aware():
+        if 'domain_id' not in ref:
             if domain_id is None:
                 domain_id = conf.default_domain_id
             ref['domain_id'] = domain_id
@@ -1066,6 +1068,29 @@ class Manager(manager.Manager):
             if new_ref['domain_id'] != orig_ref['domain_id']:
                 raise exception.ValidationError(_('Cannot change Domain ID'))
 
+    def _update_keyring_password(self, user, new_password):
+        """Update user password in Keyring backend.
+
+        This method Looks up user entries in Keyring backend
+        and accordingly update the corresponding user password.
+
+        :param user         : keyring user struct
+        :param new_password : new password to set
+        """
+        if (new_password is not None) and ('name' in user):
+            try:
+                # only update if an entry exists
+                if (keyring.get_password(KEYRING_CGCS_SERVICE, user['name'])):
+                    keyring.set_password(KEYRING_CGCS_SERVICE,
+                                         user['name'], new_password)
+
+            except (keyring.errors.PasswordSetError, RuntimeError):
+                msg = ('Failed to Update Keyring Password for the user %s')
+                LOG.warning(msg, user['name'])
+                # only raise an exception if this is the admin user
+                if (user['name'] == 'admin'):
+                    raise exception.WRSForbiddenAction(msg % user['name'])
+
     @domains_configured
     @exception_translated('user')
     def update_user(self, user_id, user_ref, initiator=None):
@@ -1105,6 +1130,14 @@ class Manager(manager.Manager):
         if enabled_change or user.get('password') is not None:
             self.emit_invalidate_user_token_persistence(user_id)
 
+        # Certain local Keystone users are stored in Keystone as opposed
+        # to the default SQL Identity backend, such as the admin user.
+        # When its password is updated, we need to update Keyring as well
+        # as certain services retrieve this user context from Keyring and
+        # will get auth failures
+        if ('password' in user) and ('name' in ref):
+            self._update_keyring_password(ref, user['password'])
+
         return self._set_domain_id_and_mapping(
             ref, domain_id, driver, mapping.EntityType.USER)
 
@@ -1115,6 +1148,7 @@ class Manager(manager.Manager):
             self._get_domain_driver_and_entity_id(user_id))
         # Get user details to invalidate the cache.
         user_old = self.get_user(user_id)
+        username = user_old.get('name', "")
         driver.delete_user(entity_id)
         self.assignment_api.delete_user_assignments(user_id)
         self.get_user.invalidate(self, user_id)
@@ -1122,6 +1156,17 @@ class Manager(manager.Manager):
                                          user_old['domain_id'])
         self.credential_api.delete_credentials_for_user(user_id)
         self.id_mapping_api.delete_id_mapping(user_id)
+        # Delete the keyring entry associated with this user (if present)
+        try:
+            keyring.delete_password(KEYRING_CGCS_SERVICE, username)
+        except keyring.errors.PasswordDeleteError:
+            LOG.warning(('delete_user: PasswordDeleteError for %s'),
+                        username)
+            pass
+        except exception.UserNotFound:
+            LOG.warning(('delete_user: UserNotFound for %s'),
+                        username)
+            pass
         notifications.Audit.deleted(self._USER, user_id, initiator)
 
         # Invalidate user role assignments cache region, as it may be caching
@@ -1382,6 +1427,14 @@ class Manager(manager.Manager):
 
         notifications.Audit.updated(self._USER, user_id, initiator)
         self.emit_invalidate_user_token_persistence(user_id)
+
+        user = self.get_user(user_id)
+        # Update Keyring password for the 'user' if it
+        # has an entry in Keyring
+        if (original_password) and ('name' in user):
+            # Change the 'user' password in keyring, provided the user
+            # has an entry in Keyring backend
+            self._update_keyring_password(user, new_password)
 
     @MEMOIZE
     def _shadow_nonlocal_user(self, user):
