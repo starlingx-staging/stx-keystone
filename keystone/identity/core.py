@@ -953,6 +953,13 @@ class Manager(manager.Manager):
         # that particular driver type.
         user['id'] = uuid.uuid4().hex
         ref = driver.create_user(user['id'], user)
+        try:
+            if 'password' in user:
+                self._add_keyring_password(user['name'],
+                                           user['password'])
+        except Exception as e:
+            LOG.exception(e)
+
         notifications.Audit.created(self._USER, user['id'], initiator)
         return self._set_domain_id_and_mapping(
             ref, domain_id, driver, mapping.EntityType.USER)
@@ -1090,6 +1097,42 @@ class Manager(manager.Manager):
                 # only raise an exception if this is the admin user
                 if (user['name'] == 'admin'):
                     raise exception.WRSForbiddenAction(msg % user['name'])
+
+    def _add_keyring_password(self, username, password):
+        """Add user password in Keyring backend.
+
+        This method Looks up user entries in Keyring backend
+        and accordingly add the corresponding user password.
+
+        :param username     : username of keystone user
+        :param password     : password to set
+        """
+        # Don't proceed if the Keyring file backend has not yet
+        # been provisioned, this means the system is still under Bootstrap
+        # and this user create request was received as part of that bootstrap
+        keyring_path = keyring.get_keyring().file_path
+        if not os.path.isfile(keyring_path):
+            LOG.info("Keyring path not available yet: %s. "
+                     "Cannot add user %s to keyring", keyring_path, username)
+            return
+
+        if (password is not None):
+            try:
+                # NOTE(knasim-wrs): we only add entries for non service
+                # users, since Sysinv will already create an entry for
+                # services users
+                if (keyring.get_password(username, 'services')):
+                    return
+
+                # only update if an entry exists
+                if (not keyring.get_password(KEYRING_CGCS_SERVICE, username)):
+                    keyring.set_password(KEYRING_CGCS_SERVICE,
+                                         username, password)
+            except (keyring.errors.PasswordSetError, RuntimeError):
+                msg = ('Failed to Add Keyring Password for the user %s')
+                LOG.warning(msg, username)
+            except Exception as e:
+                LOG.exception(e)
 
     @domains_configured
     @exception_translated('user')
