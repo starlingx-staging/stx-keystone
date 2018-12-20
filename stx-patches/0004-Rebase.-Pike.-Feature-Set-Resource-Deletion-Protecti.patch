@@ -1,0 +1,70 @@
+From f123fea4d9e533ffbe60574ade970d1a86f43f5f Mon Sep 17 00:00:00 2001
+From: Kam Nasim <kam.nasim@windriver.com>
+Date: Mon, 2 Oct 2017 16:38:17 -0400
+Subject: [PATCH 04/14] Rebase. Pike. Feature Set: Resource Deletion Protection
+
+Squashes the following commits:
+
+Using Keystone RBAC for deletion protection for admin,
+services users, roles and projects (Author: Kam Nasim)
+
+Adding Role Based Access Control (RBAC) policies to Unauthorize, a)
+deletion of services & admin users, b) deletion of services & admin
+projects, c) deletion of admin role, d) password changes for
+services users
+
+N.B: As of the Pike blueprint: policy-in-code, the RBAC policies are now
+hardcoded, and only non default policies specified explicitly in a
+policy.json file
+---
+ etc/policy.wrs.json | 38 ++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 38 insertions(+)
+ create mode 100644 etc/policy.wrs.json
+
+diff --git a/etc/policy.wrs.json b/etc/policy.wrs.json
+new file mode 100644
+index 0000000..4d10eae
+--- /dev/null
++++ b/etc/policy.wrs.json
+@@ -0,0 +1,38 @@
++{
++    "admin_required": "role:admin or is_admin:1",
++    "service_role": "role:service",
++    "service_or_admin": "rule:admin_required or rule:service_role",
++    "owner" : "user_id:%(user_id)s",
++    "admin_or_owner": "rule:admin_required or rule:owner",
++    "token_subject": "user_id:%(target.token.user_id)s",
++    "admin_or_token_subject": "rule:admin_required or rule:token_subject",
++    "service_admin_or_token_subject": "rule:service_or_admin or rule:token_subject",
++   
++    "protected_domains": "'heat':%(target.domain.name)s or 'magnum':%(target.domain.name)s",
++    "protected_projects": "'admin':%(target.project.name)s or 'services':%(target.project.name)s",
++    "protected_admins": "'admin':%(target.user.name)s or 'heat_admin':%(target.user.name)s",
++    "protected_roles": "'admin':%(target.role.name)s or 'heat_admin':%(target.user.name)s",
++    "protected_services": [["'aodh':%(target.user.name)s"],
++                           ["'ceilometer':%(target.user.name)s"],
++                           ["'cinder':%(target.user.name)s"],
++                           ["'glance':%(target.user.name)s"],
++                           ["'heat':%(target.user.name)s"],
++                           ["'neutron':%(target.user.name)s"],
++                           ["'nova':%(target.user.name)s"],
++                           ["'patching':%(target.user.name)s"],
++                           ["'sysinv':%(target.user.name)s"],
++                           ["'mtce':%(target.user.name)s"],
++                           ["'magnum':%(target.user.name)s"],
++                           ["'murano':%(target.user.name)s"]],
++
++    "identity:delete_service": "rule:admin_required and not rule:protected_services",
++
++    "identity:delete_domain": "rule:admin_required and not rule:protected_domains",
++
++    "identity:delete_project": "rule:admin_required and not rule:protected_projects",
++
++    "identity:delete_user": "rule:admin_required and not (rule:protected_admins or rule:protected_services)",
++    "identity:change_password": "rule:admin_or_owner and not rule:protected_services",
++
++    "identity:delete_role": "rule:admin_required and not rule:protected_roles",
++}
+-- 
+2.7.4
+

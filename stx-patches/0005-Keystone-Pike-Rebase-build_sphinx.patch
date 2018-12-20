@@ -1,0 +1,39 @@
+From 32e4846e1a4eefaa45f0e390bd18339fbcf0d24e Mon Sep 17 00:00:00 2001
+From: Kam Nasim <kam.nasim@windriver.com>
+Date: Tue, 24 Oct 2017 15:22:28 -0400
+Subject: [PATCH 05/14] Keystone Pike Rebase - build_sphinx
+
+In Pike, oslosphinx was replaced by openstackdocstheme to provide HTML
+themes. Openstackdocstheme does a git rev-parse HEAD op to determine the
+git SHA which causes a failure while building the Keystone package.
+
+We will modify the docs html theme to use the default and not
+openstackdocstheme
+---
+ doc/source/conf.py | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/doc/source/conf.py b/doc/source/conf.py
+index 0ce7218..141067c 100644
+--- a/doc/source/conf.py
++++ b/doc/source/conf.py
+@@ -51,7 +51,6 @@ extensions = ['sphinx.ext.autodoc',
+               'oslo_config.sphinxconfiggen',
+               'oslo_config.sphinxext',
+               'oslo_policy.sphinxpolicygen',
+-              'openstackdocstheme',
+               'oslo_policy.sphinxext',
+               'ext.support_matrix',
+               ]
+@@ -135,7 +134,7 @@ man_pages = [
+ 
+ # The theme to use for HTML and HTML Help pages.  See the documentation for
+ # a list of builtin themes.
+-html_theme = 'openstackdocs'
++html_theme = 'default'
+ 
+ # Theme options are theme-specific and customize the look and feel of a theme
+ # further.  For a list of options available for each theme, see the
+-- 
+2.7.4
+
