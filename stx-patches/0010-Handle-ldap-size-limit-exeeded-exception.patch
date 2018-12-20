@@ -1,0 +1,107 @@
+From 423058cb57ba6abce91f17a5f1079e6d391137f2 Mon Sep 17 00:00:00 2001
+From: prashkre <prashkre@in.ibm.com>
+Date: Fri, 13 Oct 2017 17:31:39 +0530
+Subject: [PATCH 10/14] Handle ldap size limit exeeded exception
+
+LDAP servers have sizelimit configuration to limit the number of
+user/group objects that can be returned for an LDAP query. This
+change catches the size limit exceeded exception when users/groups
+returned from ldap search query exceeds the configured limit and
+responds with an appropriate error message instead of default
+500 error message.
+
+Change-Id: I9949bb7d458b4b037616c701e0e4d362bfa36473
+Closes-Bug: #1712415
+(cherry picked from commit f776fc18383fcfdc97932eaaab261a0b85e0ef68)
+
+Signed-off-by: Kam Nasim <kam.nasim@windriver.com>
+---
+ keystone/exception.py                              |  6 ++++
+ keystone/identity/backends/ldap/common.py          |  9 ++++--
+ .../unit/identity/backends/test_ldap_common.py     | 32 ++++++++++++++++++++++
+ 3 files changed, 44 insertions(+), 3 deletions(-)
+
+diff --git a/keystone/exception.py b/keystone/exception.py
+index b9731df..2578092 100644
+--- a/keystone/exception.py
++++ b/keystone/exception.py
+@@ -614,3 +614,9 @@ class LDAPServerConnectionError(UnexpectedError):
+ class LDAPInvalidCredentialsError(UnexpectedError):
+     message_format = _('Unable to authenticate against Identity backend - '
+                        'Invalid username or password')
++
++
++class LDAPSizeLimitExceeded(UnexpectedError):
++    message_format = _('Number of User/Group entities returned by LDAP '
++                       'exceeded size limit. Contact your LDAP '
++                       'administrator.')
+diff --git a/keystone/identity/backends/ldap/common.py b/keystone/identity/backends/ldap/common.py
+index 3b47bf4..855ee46 100644
+--- a/keystone/identity/backends/ldap/common.py
++++ b/keystone/identity/backends/ldap/common.py
+@@ -930,9 +930,12 @@ class KeystoneLDAPHandler(LDAPHandler):
+                 attrlist_utf8 = None
+             else:
+                 attrlist_utf8 = list(map(utf8_encode, attrlist))
+-            ldap_result = self.conn.search_s(base_utf8, scope,
+-                                             filterstr_utf8,
+-                                             attrlist_utf8, attrsonly)
++            try:
++                ldap_result = self.conn.search_s(base_utf8, scope,
++                                                 filterstr_utf8,
++                                                 attrlist_utf8, attrsonly)
++            except ldap.SIZELIMIT_EXCEEDED:
++                raise exception.LDAPSizeLimitExceeded()
+ 
+         py_result = convert_ldap_result(ldap_result)
+ 
+diff --git a/keystone/tests/unit/identity/backends/test_ldap_common.py b/keystone/tests/unit/identity/backends/test_ldap_common.py
+index f7bd7f0..13a9085 100644
+--- a/keystone/tests/unit/identity/backends/test_ldap_common.py
++++ b/keystone/tests/unit/identity/backends/test_ldap_common.py
+@@ -22,6 +22,7 @@ from oslo_config import fixture as config_fixture
+ 
+ from keystone.common import driver_hints
+ import keystone.conf
++from keystone import exception as ks_exception
+ from keystone.identity.backends.ldap import common as common_ldap
+ from keystone.tests import unit
+ from keystone.tests.unit import default_fixtures
+@@ -575,3 +576,34 @@ class LDAPFilterQueryCompositionTest(unit.BaseTestCase):
+             self.filter_attribute_name, username)
+         self.assertEqual(expected_ldap_filter,
+                          self.base_ldap.filter_query(hints=hints, query=None))
++
++
++class LDAPSizeLimitTest(unit.TestCase):
++    """Test the size limit exceeded handling in keystone.common.ldap.core."""
++
++    def setUp(self):
++        super(LDAPSizeLimitTest, self).setUp()
++
++        self.useFixture(ldapdb.LDAPDatabase())
++        self.useFixture(database.Database())
++
++        self.load_backends()
++        self.load_fixtures(default_fixtures)
++
++    def config_overrides(self):
++        super(LDAPSizeLimitTest, self).config_overrides()
++        self.config_fixture.config(group='identity', driver='ldap')
++
++    def config_files(self):
++        config_files = super(LDAPSizeLimitTest, self).config_files()
++        config_files.append(unit.dirs.tests_conf('backend_ldap.conf'))
++        return config_files
++
++    @mock.patch.object(fakeldap.FakeLdap, 'search_s')
++    def test_search_s_sizelimit_exceeded(self, mock_search_s):
++        mock_search_s.side_effect = ldap.SIZELIMIT_EXCEEDED
++        conn = self.identity_api.user.get_connection()
++        self.assertRaises(ks_exception.LDAPSizeLimitExceeded,
++                          conn.search_s,
++                          'dc=example,dc=test',
++                          ldap.SCOPE_SUBTREE)
+-- 
+2.7.4
+

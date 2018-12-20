@@ -1,0 +1,83 @@
+From 1d2353cdb6839ce6b95f5142e9a87bb56a0b996e Mon Sep 17 00:00:00 2001
+From: Kam Nasim <kam.nasim@windriver.com>
+Date: Wed, 15 Feb 2017 17:20:36 -0500
+Subject: [PATCH 02/14] Rebase. Pike. Feature Set: Keystone WSGI
+
+Squashes the following commits:
+
+Keystone Newton Rebase
+Newton removes support for eventlets, and keystone needs to be
+moved over to WSGI. A public (port 5000) and an admin (port 35357) wsgi
+applications and scriplets are now created for this purpose.
+(Author: Prajeesh Murukan)
+------------------------------------------------------------------------
+Keystone Pike Rebase
+Address sphinx autodoc failure by encapsulating scripts under __main__
+(Author: Kam Nasim)
+------------------------------------------------------------------------
+---
+ admin.py  | 22 ++++++++++++++++++++++
+ public.py | 22 ++++++++++++++++++++++
+ 2 files changed, 44 insertions(+)
+ create mode 100644 admin.py
+ create mode 100644 public.py
+
+diff --git a/admin.py b/admin.py
+new file mode 100644
+index 0000000..91ec8e3
+--- /dev/null
++++ b/admin.py
+@@ -0,0 +1,22 @@
++# Copyright (c) 2013-2017 Wind River Systems, Inc.
++#
++# Licensed under the Apache License, Version 2.0 (the "License"); you may
++# not use this file except in compliance with the License. You may obtain
++# a copy of the License at
++#
++#      http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
++# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
++# License for the specific language governing permissions and limitations
++# under the License.
++
++
++from keystone.server import wsgi as wsgi_server
++
++import sys
++sys.argv = sys.argv[:1]
++
++if __name__ == "__main__":
++    application = wsgi_server.initialize_admin_application()
+diff --git a/public.py b/public.py
+new file mode 100644
+index 0000000..ce39eec
+--- /dev/null
++++ b/public.py
+@@ -0,0 +1,22 @@
++# Copyright (c) 2013-2017 Wind River Systems, Inc.
++#
++# Licensed under the Apache License, Version 2.0 (the "License"); you may
++# not use this file except in compliance with the License. You may obtain
++# a copy of the License at
++#
++#      http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
++# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
++# License for the specific language governing permissions and limitations
++# under the License.
++
++
++from keystone.server import wsgi as wsgi_server
++
++import sys
++sys.argv = sys.argv[:1]
++
++if __name__ == "__main__":
++    application = wsgi_server.initialize_public_application()
+-- 
+2.7.4
+

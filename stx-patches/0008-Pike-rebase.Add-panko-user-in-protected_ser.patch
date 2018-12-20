@@ -1,0 +1,27 @@
+From 76f9445cdd6ba34cfea753bf33a760f63eecbdfb Mon Sep 17 00:00:00 2001
+From: Angie Wang <angie.Wang@windriver.com>
+Date: Thu, 2 Nov 2017 15:01:26 -0400
+Subject: [PATCH 08/14] Pike rebase.Add panko user in
+ protected_services
+
+---
+ etc/policy.wrs.json | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/etc/policy.wrs.json b/etc/policy.wrs.json
+index 4d10eae..0f8a777 100644
+--- a/etc/policy.wrs.json
++++ b/etc/policy.wrs.json
+@@ -23,7 +23,8 @@
+                            ["'sysinv':%(target.user.name)s"],
+                            ["'mtce':%(target.user.name)s"],
+                            ["'magnum':%(target.user.name)s"],
+-                           ["'murano':%(target.user.name)s"]],
++                           ["'murano':%(target.user.name)s"],
++                           ["'panko':%(target.user.name)s"]],
+ 
+     "identity:delete_service": "rule:admin_required and not rule:protected_services",
+ 
+-- 
+2.7.4
+

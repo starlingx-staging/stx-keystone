@@ -1,0 +1,27 @@
+From 3d48c63323ba5624a837f74ef8b0606e9267cbc7 Mon Sep 17 00:00:00 2001
+From: Wen Shi <wen.shi@windriver.com>
+Date: Thu, 1 Feb 2018 16:56:17 -0600
+Subject: [PATCH 12/14] Update keystone config to support tox coverage
+
+---
+ tox.ini | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/tox.ini b/tox.ini
+index 30e9efc..522ed1a 100644
+--- a/tox.ini
++++ b/tox.ini
+@@ -46,8 +46,10 @@ commands = bandit -r keystone -x tests
+ # Also do not run test_coverage_ext tests while gathering coverage as those
+ # tests conflict with coverage.
+ commands =
++  coverage erase
+   find keystone -type f -name "*.pyc" -delete
+   python setup.py testr --coverage --testr-args='{posargs}'
++  coverage xml
+ 
+ [testenv:patch_cover]
+ commands =
+-- 
+2.7.4
+

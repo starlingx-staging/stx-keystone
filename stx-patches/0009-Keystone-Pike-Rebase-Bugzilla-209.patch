@@ -1,0 +1,76 @@
+From 85daeade83350bbbd50980134b740c5cfb6d854f Mon Sep 17 00:00:00 2001
+From: Kam Nasim <kam.nasim@windriver.com>
+Date: Tue, 7 Nov 2017 12:56:51 -0500
+Subject: [PATCH 09/14] Keystone Pike Rebase
+
+Since keystone now uses namespaces to import drivers, we need to
+register the hybrid driver endpoint with stevedore so it can load it.
+
+Further changes to Keystone's Identity hybrid driver. Defines a missing
+function (of the base class) in the hybrid driver. Also marks the hybrid
+driver as domain_aware since in the absence of LDAP write support, all
+user create operations now need to goto the SQL backend, which is
+domain aware.
+---
+ keystone/identity/backends/hybrid.py | 11 +++++++++--
+ keystone/identity/core.py            |  2 +-
+ setup.cfg                            |  1 +
+ 3 files changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/keystone/identity/backends/hybrid.py b/keystone/identity/backends/hybrid.py
+index e93a57e..504f6eb 100644
+--- a/keystone/identity/backends/hybrid.py
++++ b/keystone/identity/backends/hybrid.py
+@@ -64,8 +64,10 @@ class Identity(base.IdentityDriverBase):
+         self.ldap = ldap.Identity(conf)
+ 
+     def is_domain_aware(self):
+-        # domain support is delegated to the LDAP backend (except default)
+-        return self.ldap.is_domain_aware()
++        # Note(knasim-wrs): the hybrid driver will now create users
++        # in the SQL backend only, which is domain aware so we need to
++        # support domain ids in the hybrid driver
++        return self.sql.is_domain_aware()
+ 
+     def generates_uuids(self):
+         return self.ldap.generates_uuids()
+@@ -122,6 +124,11 @@ class Identity(base.IdentityDriverBase):
+             LOG.error(("Failed to query LDAP users: %s"), str(e))
+         return users
+ 
++    def unset_default_project_id(self, project_id):
++        LOG.debug("unset_default_project_id %s: %s", project_id,
++                  ldap.READ_ONLY_LDAP_ERROR_MESSAGE)
++        return self.sql.unset_default_project_id(project_id)
++
+     def get_user_by_name(self, user_name, domain_id):
+         try:
+             return self.sql.get_user_by_name(user_name, domain_id)
+diff --git a/keystone/identity/core.py b/keystone/identity/core.py
+index 4096992..314b5b9 100644
+--- a/keystone/identity/core.py
++++ b/keystone/identity/core.py
+@@ -695,7 +695,7 @@ class Manager(manager.Manager):
+         None that means we are running in a single backend mode, so to
+         remain backwardly compatible, we put in the default domain ID.
+         """
+-        if not driver.is_domain_aware():
++        if 'domain_id' not in ref:
+             if domain_id is None:
+                 domain_id = conf.default_domain_id
+             ref['domain_id'] = domain_id
+diff --git a/setup.cfg b/setup.cfg
+index f03acd1..458157c 100644
+--- a/setup.cfg
++++ b/setup.cfg
+@@ -125,6 +125,7 @@ keystone.credential.provider =
+ keystone.identity =
+     ldap = keystone.identity.backends.ldap:Identity
+     sql = keystone.identity.backends.sql:Identity
++    hybrid = keystone.identity.backends.hybrid:Identity
+ 
+ keystone.identity.id_generator =
+     sha256 = keystone.identity.id_generators.sha256:Generator
+-- 
+2.7.4
+
